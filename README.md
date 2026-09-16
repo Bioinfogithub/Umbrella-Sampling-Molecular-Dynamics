@@ -30,7 +30,30 @@ Trajectory analysis
 WHAM / PMF calculation
         ↓
 Free-energy profile
-```text
+
+# Umbrella Sampling and Molecular Dynamics
+
+A GROMACS-based workflow for molecular dynamics simulations and free-energy calculations.
+
+## Workflow
+
+The overall workflow consists of the following steps:
+
+1. System preparation
+2. Energy minimization
+3. Equilibration
+4. Umbrella sampling
+5. Production MD
+6. PMF calculation
+
+## System Preparation
+
+The protein–ligand system was prepared using standard GROMACS protocols.
+
+```bash
+gmx pdb2gmx -f protein.pdb -o processed.gro
+gmx editconf -f processed.gro -o boxed.gro
+gmx solvate -cp boxed.gro -cs spc216.gro -o solvated.gro
 
 ## Methods
 
