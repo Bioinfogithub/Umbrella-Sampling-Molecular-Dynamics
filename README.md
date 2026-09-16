@@ -30,6 +30,7 @@ Trajectory analysis
 WHAM / PMF calculation
         ↓
 Free-energy profile
+```text
 
 ## Methods
 
