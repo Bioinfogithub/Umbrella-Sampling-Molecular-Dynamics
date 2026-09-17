@@ -1,0 +1,6 @@
+# One pull-force file per line.
+# Keep the order identical to tpr-files.dat.
+../windows/window-001/umbrella_pullf.xvg
+../windows/window-002/umbrella_pullf.xvg
+../windows/window-003/umbrella_pullf.xvg
+# ...

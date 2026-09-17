@@ -1,474 +1,405 @@
 # Umbrella Sampling and Molecular Dynamics
 
-A GROMACS-based computational workflow for molecular dynamics simulations, umbrella sampling, potential of mean force (PMF) calculation, and free-energy analysis.
+A GROMACS-based workflow for umbrella sampling, potential of mean force (PMF) calculation, and free-energy analysis along a one-dimensional reaction coordinate.
 
 ## Overview
 
-This repository contains a workflow for performing umbrella sampling molecular dynamics simulations to characterize the free-energy landscape along a predefined reaction coordinate.
+Umbrella sampling uses a series of biased simulations centered at different positions along a reaction coordinate. The resulting configurational distributions are combined to reconstruct an unbiased free-energy profile.
 
-The workflow includes system preparation, energy minimization, equilibration, reaction-coordinate definition, generation and equilibration of umbrella windows, production simulations, trajectory analysis, and PMF calculation using WHAM.
-
-## Workflow
+This repository is organized as a reproducible workflow:
 
 ```text
 System preparation
         ↓
-Energy minimization
-        ↓
 Equilibration
         ↓
-Definition of reaction coordinate
+Pulling / reaction-coordinate sampling
         ↓
-Generation of umbrella windows
+Frame extraction
         ↓
-Window equilibration
+Reaction-coordinate analysis
         ↓
-Production simulations
+Selection of umbrella windows
         ↓
-Trajectory analysis
+Window equilibration / preparation
         ↓
-WHAM / PMF calculation
+Umbrella production simulations
         ↓
-Free-energy profile
+Trajectory and sampling analysis
+        ↓
+WHAM
+        ↓
+PMF / free-energy profile
 ```
 
-## 1. System Preparation
-
-The molecular system is prepared for molecular dynamics simulations using standard GROMACS procedures.
-
-### Protein topology generation
-
-```bash
-gmx pdb2gmx \
-    -f protein.pdb \
-    -o processed.gro \
-    -p topol.top \
-    -ff <force_field>
-```
-
-### Define the simulation box
-
-```bash
-gmx editconf \
-    -f processed.gro \
-    -o boxed.gro \
-    -c \
-    -d 1.0 \
-    -bt cubic
-```
-
-### Solvate the system
-
-```bash
-gmx solvate \
-    -cp boxed.gro \
-    -cs spc216.gro \
-    -o solvated.gro \
-    -p topol.top
-```
-
-### Add ions
-
-First generate the input file for ion addition:
-
-```bash
-gmx grompp \
-    -f ions.mdp \
-    -c solvated.gro \
-    -p topol.top \
-    -o ions.tpr
-```
-
-Then add ions to neutralize the system:
-
-```bash
-gmx genion \
-    -s ions.tpr \
-    -o solvated_ions.gro \
-    -p topol.top \
-    -pname NA \
-    -nname CL \
-    -neutral
-```
-
-> **Note:** The force field, water model, ion names, and simulation parameters should be adjusted according to the system being studied.
-
-## 2. Energy Minimization
-
-Energy minimization is performed to remove unfavorable steric contacts and obtain a physically reasonable starting configuration.
-
-```bash
-gmx grompp \
-    -f minim.mdp \
-    -c solvated_ions.gro \
-    -p topol.top \
-    -o em.tpr
-```
-
-Run energy minimization:
-
-```bash
-gmx mdrun \
-    -deffnm em
-```
-
-The minimized structure can then be inspected using the potential energy and maximum force.
-
-```bash
-gmx energy \
-    -f em.edr \
-    -o potential.xvg
-```
-
-## 3. Equilibration
-
-The system is gradually equilibrated before umbrella sampling.
-
-### NVT equilibration
-
-```bash
-gmx grompp \
-    -f nvt.mdp \
-    -c em.gro \
-    -r em.gro \
-    -p topol.top \
-    -o nvt.tpr
-```
-
-```bash
-gmx mdrun \
-    -deffnm nvt
-```
-
-### NPT equilibration
-
-```bash
-gmx grompp \
-    -f npt.mdp \
-    -c nvt.gro \
-    -r nvt.gro \
-    -p topol.top \
-    -o npt.tpr
-```
-
-```bash
-gmx mdrun \
-    -deffnm npt
-```
-
-The temperature, pressure, density, and other relevant properties are monitored during equilibration.
-
-## 4. Definition of the Reaction Coordinate
-
-A suitable reaction coordinate is selected to describe the molecular process of interest.
-
-Depending on the system, the reaction coordinate may represent:
-
-- Distance between molecular groups
-- Center-of-mass distance
-- Protein–ligand separation
-- Intermolecular distance
-- Dihedral angle
-- Another physically meaningful collective variable
-
-For distance-based umbrella sampling, the reaction coordinate can be defined using GROMACS pull groups.
-
-Example:
-
-```text
-pull                    = yes
-pull-ngroups            = 2
-pull-ncoords            = 1
-pull-coord1-type        = umbrella
-pull-coord1-geometry    = distance
-pull-coord1-groups      = 1 2
-pull-coord1-k           = 1000
-```
-
-The exact parameters should be modified according to the molecular system and selected reaction coordinate.
-
-## 5. Generation of Umbrella Windows
-
-A series of configurations is generated along the reaction coordinate.
-
-Each configuration represents an umbrella window centered at a specific value of the reaction coordinate.
-
-For example:
-
-```text
-Window 01 → 0.20 nm
-Window 02 → 0.25 nm
-Window 03 → 0.30 nm
-Window 04 → 0.35 nm
-Window 05 → 0.40 nm
-...
-Window N  → final reaction-coordinate value
-```
-
-The windows should provide sufficient overlap between neighboring distributions to allow reliable reconstruction of the free-energy profile.
-
-## 6. Window Equilibration
-
-Each umbrella window is independently equilibrated while applying a harmonic bias potential around its target reaction-coordinate value.
-
-Example:
-
-```bash
-gmx grompp \
-    -f umbrella_equilibration.mdp \
-    -c window01.gro \
-    -r window01.gro \
-    -p topol.top \
-    -o window01_equil.tpr
-```
-
-Run the equilibration:
-
-```bash
-gmx mdrun \
-    -deffnm window01_equil
-```
-
-The same procedure is repeated for all umbrella windows.
-
-## 7. Production Umbrella Sampling
-
-After equilibration, production simulations are performed for each umbrella window.
-
-Example:
-
-```bash
-gmx grompp \
-    -f umbrella_production.mdp \
-    -c window01_equil.gro \
-    -r window01_equil.gro \
-    -p topol.top \
-    -o window01.tpr
-```
-
-```bash
-gmx mdrun \
-    -deffnm window01
-```
-
-This procedure is repeated for all windows.
-
-The resulting trajectories and pull-force data are used for subsequent PMF analysis.
-
-## 8. Trajectory Analysis
-
-The umbrella trajectories are analyzed to assess structural stability and sampling quality.
-
-Typical analyses include:
-
-### Root-mean-square deviation (RMSD)
-
-```bash
-gmx rms \
-    -s window01.tpr \
-    -f window01.xtc \
-    -o rmsd.xvg
-```
-
-### Radius of gyration
-
-```bash
-gmx gyrate \
-    -s window01.tpr \
-    -f window01.xtc \
-    -o gyration.xvg
-```
-
-### Reaction-coordinate distribution
-
-The pull-coordinate trajectory can be extracted for each window:
-
-```bash
-gmx distance \
-    -s window01.tpr \
-    -f window01.xtc \
-    -o distance.xvg
-```
-
-The distributions from neighboring windows should show sufficient overlap before calculating the PMF.
-
-## 9. WHAM / PMF Calculation
-
-The Weighted Histogram Analysis Method (WHAM) is used to combine the biased umbrella-sampling simulations and reconstruct the unbiased potential of mean force.
-
-First, prepare the list of umbrella simulation input files and pull-force files.
-
-Example:
-
-```text
-tpr-files.dat
-window01.tpr
-window02.tpr
-window03.tpr
-...
-windowN.tpr
-```
-
-```text
-pullf-files.dat
-window01_pullf.xvg
-window02_pullf.xvg
-window03_pullf.xvg
-...
-windowN_pullf.xvg
-```
-
-The PMF can then be calculated using:
-
-```bash
-gmx wham \
-    -it tpr-files.dat \
-    -if pullf-files.dat \
-    -o pmf.xvg \
-    -hist histo.xvg \
-    -b 0
-```
-
-The resulting `pmf.xvg` file contains the reconstructed free-energy profile along the reaction coordinate.
-
-## 10. Free-Energy Profile
-
-The calculated PMF is analyzed to identify:
-
-- Free-energy minima
-- Free-energy barriers
-- Stable and metastable states
-- Transition regions
-- Relative free-energy differences
-
-The final profile can be plotted using Python, Origin, XMGrace, or another scientific visualization package.
-
-Example Python workflow:
-
-```python
-import numpy as np
-import matplotlib.pyplot as plt
-
-data = np.loadtxt("pmf.xvg", comments=["@", "#"])
-
-reaction_coordinate = data[:, 0]
-free_energy = data[:, 1]
-
-plt.plot(reaction_coordinate, free_energy)
-plt.xlabel("Reaction coordinate")
-plt.ylabel("Free energy (kJ/mol)")
-plt.tight_layout()
-plt.show()
-```
-
-## Methods
-
-The workflow incorporates the following computational methods:
-
-- All-atom molecular dynamics (AAMD)
-- Umbrella sampling
-- Weighted Histogram Analysis Method (WHAM)
-- Potential of Mean Force (PMF)
-- Free-energy analysis
-- Trajectory analysis
-- Structural analysis
-
-## Software
-
-- **GROMACS** — molecular dynamics simulations and trajectory analysis
-- **Python** — data processing and visualization
-- **WHAM** — free-energy reconstruction
-- **Linux/Bash** — workflow automation and scripting
-- **VMD / PyMOL** — molecular visualization and structural inspection
+The workflow follows the general strategy described in the umbrella-sampling tutorial by Justin A. Lemkul, while the scripts and repository organization here are provided as a reusable project template. The tutorial emphasizes generating configurations along a reaction coordinate, selecting configurations at suitable spacings, running restrained simulations, and using WHAM to obtain the PMF. citeturn1search0turn2search0
 
 ## Repository Structure
-
-A recommended organization for the repository is:
 
 ```text
 Umbrella-Sampling-Molecular-Dynamics/
 │
 ├── README.md
+├── .gitignore
 │
 ├── input/
-│   ├── structure/
-│   ├── topology/
-│   └── index/
+│   └── README.md
 │
 ├── mdp/
-│   ├── minim.mdp
-│   ├── nvt.mdp
-│   ├── npt.mdp
-│   ├── umbrella_equilibration.mdp
-│   └── umbrella_production.mdp
+│   ├── pull.mdp
+│   └── umbrella_template.mdp
 │
 ├── scripts/
-│   ├── prepare_system.sh
-│   ├── generate_windows.sh
-│   ├── run_windows.sh
-│   └── analyze_pmf.py
+│   ├── extract_frames.sh
+│   ├── calculate_distances.sh
+│   ├── generate_windows.py
+│   ├── create_windows.sh
+│   └── run_umbrella.sh
 │
 ├── windows/
-│   ├── window01/
-│   ├── window02/
-│   ├── window03/
-│   └── ...
+│   └── README.md
 │
 ├── analysis/
-│   ├── rmsd/
-│   ├── rg/
-│   ├── distributions/
-│   └── pmf/
+│   ├── tpr-files.dat.example
+│   ├── pullf-files.dat.example
+│   ├── run_wham.sh
+│   └── plot_pmf.py
 │
 └── results/
-    └── pmf.xvg
+    └── README.md
 ```
+
+## 1. Input Preparation
+
+Place the system-specific files in `input/`.
+
+Typical files include:
+
+```text
+input/
+├── starting_structure.pdb
+├── topol.top
+├── *.itp
+├── index.ndx
+├── pull.tpr
+└── pull.xtc
+```
+
+The exact files depend on the molecular system, force field, and simulation protocol.
+
+This repository does not include system-specific coordinates, topology files, or trajectories by default. These should be added only when they are appropriate for redistribution.
+
+## 2. Pulling Simulation
+
+A pulling simulation can be used to generate configurations spanning the desired reaction coordinate.
+
+The corresponding parameter template is:
+
+```text
+mdp/pull.mdp
+```
+
+The pull groups define the two molecular groups between which the reaction coordinate is measured.
+
+Important parameters include:
+
+```text
+pull = yes
+pull-ngroups = 2
+pull-ncoords = 1
+pull-coord1-groups = 1 2
+pull-coord1-geometry = distance
+pull-coord1-type = umbrella
+```
+
+The actual pull groups, force constant, pulling rate, simulation time, and reaction-coordinate range must be adapted to the system.
+
+## 3. Extract Configurations
+
+After the pulling simulation, individual configurations can be extracted from the trajectory:
+
+```bash
+cd scripts
+bash extract_frames.sh
+```
+
+The script uses `gmx trjconv` to separate trajectory frames into individual coordinate files.
+
+The resulting structures are stored under:
+
+```text
+windows/frames/
+```
+
+## 4. Calculate the Reaction Coordinate
+
+The reaction-coordinate value of each extracted frame can then be calculated:
+
+```bash
+bash calculate_distances.sh
+```
+
+The script produces:
+
+```text
+windows/summary_distances.dat
+```
+
+The table contains the frame identifier and corresponding reaction-coordinate value.
+
+Example:
+
+```text
+frame0001    0.500
+frame0002    0.520
+frame0003    0.541
+...
+```
+
+## 5. Select Umbrella Windows
+
+Neighboring umbrella windows should provide sufficient overlap in their sampled reaction-coordinate distributions.
+
+The tutorial emphasizes that insufficient overlap can produce defects in the reconstructed PMF and may require additional intermediate windows. citeturn2search0turn1search3
+
+For approximate window selection:
+
+```bash
+python generate_windows.py ../windows/summary_distances.dat 0.2
+```
+
+Here `0.2` is an example spacing in nm. The appropriate spacing must be determined from the system and sampling behavior.
+
+The selected windows are written to:
+
+```text
+windows/selected_windows.dat
+```
+
+## 6. Create Umbrella Windows
+
+The selected configurations can be organized into independent umbrella-window directories:
+
+```bash
+bash create_windows.sh
+```
+
+The resulting structure is:
+
+```text
+windows/
+├── window-001/
+│   ├── conf.gro
+│   ├── umbrella.mdp
+│   ├── topol.top
+│   └── index.ndx
+│
+├── window-002/
+│   ├── conf.gro
+│   ├── umbrella.mdp
+│   ├── topol.top
+│   └── index.ndx
+│
+└── ...
+```
+
+Each window has its own harmonic bias centered at the selected reaction-coordinate value.
+
+## 7. Umbrella Sampling
+
+The umbrella potential is defined in:
+
+```text
+mdp/umbrella_template.mdp
+```
+
+The central parameters are:
+
+```text
+pull-coord1-type = umbrella
+pull-coord1-k = 1000
+pull-coord1-rate = 0
+pull-coord1-init = WINDOW_CENTER
+```
+
+`WINDOW_CENTER` is replaced with the target reaction-coordinate value for each window.
+
+The force constant and window centers shown here are examples. They should be chosen based on the molecular system and desired sampling overlap.
+
+## 8. Run Umbrella Simulations
+
+For each window, generate the GROMACS run input file:
+
+```bash
+gmx grompp     -f umbrella.mdp     -c conf.gro     -p topol.top     -n index.ndx     -o umbrella.tpr
+```
+
+Run the simulation:
+
+```bash
+gmx mdrun     -deffnm umbrella     -pf umbrella_pullf.xvg     -px umbrella_pullx.xvg
+```
+
+The `pullf` and `pullx` files should have unique names for each window because they are required for subsequent WHAM analysis. citeturn2search0
+
+For multiple windows:
+
+```bash
+cd scripts
+bash run_umbrella.sh
+```
+
+## 9. Check Sampling and Window Overlap
+
+Before WHAM analysis, inspect the reaction-coordinate distributions from neighboring windows.
+
+Adequate overlap is important for reliable reconstruction of the PMF. If a region has insufficient sampling, additional umbrella windows may be required. citeturn2search0turn1search3
+
+The histogram generated by WHAM can also be used to assess overlap.
+
+## 10. Prepare WHAM Input
+
+Create:
+
+```text
+analysis/tpr-files.dat
+```
+
+containing one `.tpr` file per window:
+
+```text
+../windows/window-001/umbrella.tpr
+../windows/window-002/umbrella.tpr
+../windows/window-003/umbrella.tpr
+...
+```
+
+Create:
+
+```text
+analysis/pullf-files.dat
+```
+
+containing the corresponding force files in exactly the same order:
+
+```text
+../windows/window-001/umbrella_pullf.xvg
+../windows/window-002/umbrella_pullf.xvg
+../windows/window-003/umbrella_pullf.xvg
+...
+```
+
+The tutorial specifically notes that the `.tpr` and pull-data lists must correspond and that the pull-data files need unique names. citeturn2search0
+
+Example files are provided as:
+
+```text
+analysis/tpr-files.dat.example
+analysis/pullf-files.dat.example
+```
+
+## 11. WHAM / PMF Calculation
+
+Run WHAM from the `analysis/` directory:
+
+```bash
+cd analysis
+bash run_wham.sh
+```
+
+The underlying GROMACS command is:
+
+```bash
+gmx wham     -it tpr-files.dat     -if pullf-files.dat     -o ../results/pmf.xvg     -hist ../results/histo.xvg     -unit kJ
+```
+
+GROMACS `gmx wham` combines the biased umbrella simulations to obtain the PMF. The MDTutorials example also uses `tpr-files.dat` and `pullf-files.dat` as the primary WHAM inputs. citeturn2search0
+
+## 12. Free-Energy Profile
+
+The resulting PMF is stored as:
+
+```text
+results/pmf.xvg
+```
+
+The histogram is stored as:
+
+```text
+results/histo.xvg
+```
+
+A simple Python plotting script is provided:
+
+```bash
+cd analysis
+python plot_pmf.py
+```
+
+The resulting figure is:
+
+```text
+results/pmf.png
+```
+
+## Methods
+
+- Molecular dynamics simulations
+- Steered/pulling molecular dynamics
+- Umbrella sampling
+- Reaction-coordinate analysis
+- Weighted Histogram Analysis Method (WHAM)
+- Potential of Mean Force (PMF)
+- Free-energy analysis
+- Trajectory analysis
+
+## Software
+
+- GROMACS
+- Python
+- Bash/Linux
+- NumPy
+- Matplotlib
+- VMD / PyMOL for visualization
 
 ## Reproducibility
 
-The workflow is organized into modular simulation and analysis steps so that individual stages can be reproduced independently.
+The repository separates:
 
-Simulation parameters, input structures, topology files, analysis scripts, and processing commands should be maintained alongside the corresponding simulation workflow.
+- System-specific inputs
+- GROMACS parameter files
+- Window-generation scripts
+- Umbrella simulations
+- WHAM analysis
+- Final results
 
-For reproducible analyses, the GROMACS version, force field, water model, simulation parameters, and analysis settings should be documented.
+Simulation parameters should be documented together with the GROMACS version, force field, water model, reaction coordinate, window spacing, force constant, simulation length, and analysis settings.
 
-## Requirements
+## Data and Large Files
 
-Before running the workflow, install:
+Raw trajectories and GROMACS binary/output files can become very large. Therefore, files such as:
 
-- GROMACS
-- Python 3
-- NumPy
-- Matplotlib
-- Linux or a Linux-compatible environment
-
-Python dependencies can be installed using:
-
-```bash
-pip install numpy matplotlib
+```text
+*.xtc
+*.trr
+*.tpr
+*.edr
+*.cpt
+*.log
 ```
 
-## Usage
+are excluded from the Git repository by `.gitignore`.
 
-Clone the repository:
+For large datasets or complete trajectories, use an appropriate data repository or Git LFS rather than committing large simulation outputs directly to the repository.
 
-```bash
-git clone https://github.com/Bioinfogithub/Umbrella-Sampling-Molecular-Dynamics.git
-```
+## Reference
 
-Move into the repository:
+This workflow was developed with reference to the umbrella-sampling methodology described in the GROMACS tutorial by Justin A. Lemkul:
 
-```bash
-cd Umbrella-Sampling-Molecular-Dynamics
-```
+- Justin A. Lemkul, *Umbrella Sampling*, GROMACS Tutorial.
+- Lemkul, J. A. *From Proteins to Perturbed Hamiltonians: A Suite of Tutorials for the GROMACS-2018 Molecular Simulation Package*. Living J. Comput. Mol. Sci. 2018, 1, 5068.
 
-Prepare the system, perform equilibration, generate umbrella windows, run the production simulations, and calculate the PMF following the workflow described above.
-
-## Important Considerations
-
-Umbrella sampling results depend strongly on the choice of reaction coordinate, force constant, spacing between windows, simulation length, and degree of overlap between neighboring windows.
-
-Before interpreting the PMF, the umbrella windows should therefore be checked for adequate sampling and overlap.
+See the original tutorial for the theoretical background and system-specific considerations. citeturn1search0turn1search4
 
 ## Author
 
@@ -477,7 +408,3 @@ Before interpreting the PMF, the umbrella windows should therefore be checked fo
 PhD Researcher  
 School of Biochemical Engineering  
 Indian Institute of Technology (BHU), Varanasi, India
-
-## License
-
-This repository is intended for research and academic use. A suitable open-source license can be added if the workflow and associated scripts are released for reuse.

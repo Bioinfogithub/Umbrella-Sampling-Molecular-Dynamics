@@ -1,0 +1,55 @@
+; Template for the steered/pulling simulation used to generate
+; configurations along the reaction coordinate.
+;
+; Adapt all system-specific settings before use.
+
+integrator              = md
+dt                      = 0.002
+nsteps                  = 500000
+
+; Output
+nstxout-compressed      = 1000
+nstenergy               = 1000
+nstlog                  = 1000
+
+; Temperature coupling
+tcoupl                  = V-rescale
+tc-grps                 = System
+tau_t                   = 0.1
+ref_t                   = 300
+
+; Pressure coupling
+pcoupl                  = Parrinello-Rahman
+tau_p                   = 2.0
+ref_p                   = 1.0
+compressibility         = 4.5e-5
+
+; Periodic boundary conditions
+pbc                     = xyz
+
+; Constraints
+constraints             = h-bonds
+constraint_algorithm    = lincs
+
+; Pulling setup
+pull                    = yes
+pull-ngroups            = 2
+pull-ncoords            = 1
+
+pull-group1-name        = GROUP1
+pull-group2-name        = GROUP2
+
+pull-coord1-groups      = 1 2
+pull-coord1-type        = umbrella
+pull-coord1-geometry    = distance
+pull-coord1-dim         = Y Y Y
+
+; Set the initial/reference distance and pulling rate for your system.
+; These values are examples and must be replaced.
+pull-coord1-start       = yes
+pull-coord1-rate        = 0.005
+pull-coord1-k           = 1000
+
+; Record the reaction coordinate and force
+pull-nstxout            = 100
+pull-nstfout            = 100

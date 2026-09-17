@@ -1,0 +1,5 @@
+# One umbrella .tpr file per line
+../windows/window-001/umbrella.tpr
+../windows/window-002/umbrella.tpr
+../windows/window-003/umbrella.tpr
+# ...

@@ -1,0 +1,46 @@
+; Umbrella-window template
+; Replace WINDOW_CENTER before running the generation script.
+
+integrator              = md
+dt                      = 0.002
+nsteps                  = 500000
+
+nstxout-compressed      = 1000
+nstenergy               = 1000
+nstlog                  = 1000
+
+tcoupl                  = V-rescale
+tc-grps                 = System
+tau_t                   = 0.1
+ref_t                   = 300
+
+pcoupl                  = Parrinello-Rahman
+tau_p                   = 2.0
+ref_p                   = 1.0
+compressibility         = 4.5e-5
+
+pbc                     = xyz
+
+constraints             = h-bonds
+constraint_algorithm    = lincs
+
+pull                    = yes
+pull-ngroups            = 2
+pull-ncoords            = 1
+
+pull-group1-name        = GROUP1
+pull-group2-name        = GROUP2
+
+pull-coord1-groups      = 1 2
+pull-coord1-type        = umbrella
+pull-coord1-geometry    = distance
+pull-coord1-dim         = Y Y Y
+
+; The umbrella remains fixed at the selected center.
+pull-coord1-start       = no
+pull-coord1-rate        = 0
+pull-coord1-k           = 1000
+pull-coord1-init        = WINDOW_CENTER
+
+pull-nstxout             = 100
+pull-nstfout             = 100
