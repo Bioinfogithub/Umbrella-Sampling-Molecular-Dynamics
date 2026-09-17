@@ -399,7 +399,7 @@ This workflow was developed with reference to the umbrella-sampling methodology 
 - Justin A. Lemkul, *Umbrella Sampling*, GROMACS Tutorial.
 - Lemkul, J. A. *From Proteins to Perturbed Hamiltonians: A Suite of Tutorials for the GROMACS-2018 Molecular Simulation Package*. Living J. Comput. Mol. Sci. 2018, 1, 5068.
 
-See the original tutorial for the theoretical background and system-specific considerations. citeturn1search0turn1search4
+See the original tutorial for the theoretical background and system-specific considerations.
 
 ## Author
 
